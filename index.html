@@ -1,0 +1,150 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>RFID Scanner</title>
+    <script src="/socket.io/socket.io.js"></script>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+            background-color: #f0f0f0;
+        }
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+            background-color: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        h1 {
+            color: #333;
+            text-align: center;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 20px;
+        }
+        th, td {
+            padding: 12px;
+            text-align: left;
+            border-bottom: 1px solid #ddd;
+        }
+        th {
+            background-color: #f8f9fa;
+            font-weight: bold;
+        }
+        tr:hover {
+            background-color: #f5f5f5;
+        }
+        .status {
+            text-align: center;
+            margin: 20px 0;
+            padding: 10px;
+            border-radius: 4px;
+        }
+        .connected {
+            background-color: #d4edda;
+            color: #155724;
+        }
+        .disconnected {
+            background-color: #f8d7da;
+            color: #721c24;
+        }
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+        }
+        .counter {
+            font-size: 24px;
+            font-weight: bold;
+        }
+        .reset-btn {
+            padding: 10px 20px;
+            font-size: 16px;
+            background-color: #ff4444;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+        }
+        .reset-btn:hover {
+            background-color: #cc0000;
+        }
+        .tag-count {
+            font-weight: bold;
+            color: #007bff;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>RFID Scanner</h1>
+        <div id="status" class="status connected">Connected to Reader</div>
+        <div class="header">
+            <div class="counter">Total Unique Tags: <span id="count">0</span></div>
+            <button class="reset-btn" onclick="resetCounter()">Reset Counter</button>
+        </div>
+        <table>
+            <thead>
+                <tr>
+                    <th>No.</th>
+                    <th>Tag ID</th>
+                    <th>Scan Count</th>
+                    <th>Last Scan Time</th>
+                </tr>
+            </thead>
+            <tbody id="tagList"></tbody>
+        </table>
+    </div>
+
+    <script>
+        const socket = io();
+        const tagList = document.getElementById('tagList');
+        const status = document.getElementById('status');
+        const countElement = document.getElementById('count');
+        let tagCount = 0;
+
+        socket.on('connect', () => {
+            status.textContent = 'Connected to Server';
+            status.className = 'status connected';
+        });
+
+        socket.on('disconnect', () => {
+            status.textContent = 'Disconnected from Server';
+            status.className = 'status disconnected';
+        });
+
+        socket.on('update', (data) => {
+            const { tags, counts } = data;
+            const countMap = new Map(counts);
+            
+            tagList.innerHTML = '';
+            tagCount = 0;
+            tags.forEach(([tagId, timestamp]) => {
+                tagCount++;
+                const scanCount = countMap.get(tagId) || 0;
+                const row = document.createElement('tr');
+                row.innerHTML = `
+                    <td>${tagCount}</td>
+                    <td>${tagId}</td>
+                    <td class="tag-count">${scanCount}</td>
+                    <td>${timestamp}</td>
+                `;
+                tagList.appendChild(row);
+            });
+            
+            countElement.textContent = tags.length;
+        });
+
+        function resetCounter() {
+            socket.emit('reset');
+        }
+    </script>
+</body>
+</html> 

@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>RFID Command</title>
+    <script src="/socket.io/socket.io.js"></script>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+            background-color: #f0f0f0;
+        }
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+            background-color: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        h1 {
+            color: #333;
+            text-align: center;
+        }
+        .form-group {
+            margin-bottom: 15px;
+        }
+        label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: bold;
+        }
+        input {
+            width: 100%;
+            padding: 8px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            box-sizing: border-box;
+        }
+        button {
+            padding: 10px 20px;
+            font-size: 16px;
+            background-color: #007bff;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+        }
+        button:hover {
+            background-color: #0056b3;
+        }
+        .status {
+            margin-top: 20px;
+            padding: 10px;
+            border-radius: 4px;
+            background-color: #f8f9fa;
+        }
+        .response {
+            margin-top: 20px;
+            padding: 10px;
+            border-radius: 4px;
+            background-color: #e9ecef;
+            font-family: monospace;
+            white-space: pre-wrap;
+        }
+        .error {
+            color: #dc3545;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>RFID Command</h1>
+        
+        <div class="form-group">
+            <label for="adr">Address (hex):</label>
+            <input type="text" id="adr" value="00" placeholder="00">
+        </div>
+        
+        <div class="form-group">
+            <label for="cmd">Command (hex):</label>
+            <input type="text" id="cmd" value="21" placeholder="21">
+        </div>
+        
+        <div class="form-group">
+            <label for="data">Data (hex, optional):</label>
+            <input type="text" id="data" placeholder="00 01 02">
+        </div>
+        
+        <button onclick="sendCommand()">Send Command</button>
+        
+        <div id="status" class="status">Ready</div>
+        <div id="response" class="response"></div>
+    </div>
+
+    <script>
+        const socket = io();
+        const status = document.getElementById('status');
+        const response = document.getElementById('response');
+        
+        socket.on('connect', () => {
+            status.textContent = 'Connected to server';
+        });
+        
+        socket.on('disconnect', () => {
+            status.textContent = 'Disconnected from server';
+        });
+        
+        socket.on('status', (msg) => {
+            status.textContent = msg;
+        });
+        
+        socket.on('response', (data) => {
+            response.textContent = data;
+        });
+        
+        socket.on('error', (msg) => {
+            status.textContent = msg;
+            status.className = 'status error';
+        });
+        
+        function sendCommand() {
+            const adr = parseInt(document.getElementById('adr').value, 16);
+            const cmd = parseInt(document.getElementById('cmd').value, 16);
+            const dataStr = document.getElementById('data').value;
+            
+            let cmdData = null;
+            if (dataStr) {
+                cmdData = dataStr.split(' ').map(x => parseInt(x, 16));
+            }
+            
+            socket.emit('sendCommand', { adr, cmd, data: cmdData });
+            response.textContent = 'Waiting for response...';
+        }
+    </script>
+</body>
+</html> 

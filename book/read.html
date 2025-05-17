@@ -1,0 +1,161 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>RFID Reader</title>
+    <script src="/socket.io/socket.io.js"></script>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+            background-color: #f0f0f0;
+        }
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+            background-color: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .status {
+            padding: 10px;
+            margin-bottom: 10px;
+            border-radius: 4px;
+            background-color: #e8f5e9;
+        }
+        .error {
+            background-color: #ffebee;
+            color: #c62828;
+            padding: 10px;
+            margin-bottom: 10px;
+            border-radius: 4px;
+            display: none;
+        }
+        .data-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 10px;
+        }
+        .data-table th {
+            background-color: #f5f5f5;
+            padding: 10px;
+            text-align: left;
+            border-bottom: 2px solid #ddd;
+        }
+        .data-table td {
+            padding: 10px;
+            border-bottom: 1px solid #ddd;
+            font-family: monospace;
+        }
+        .data-table tr:hover {
+            background-color: #f8f9fa;
+        }
+        .count-badge {
+            background-color: #2196f3;
+            color: white;
+            padding: 2px 8px;
+            border-radius: 12px;
+            font-size: 0.9em;
+        }
+        .timestamp {
+            font-size: 0.9em;
+            color: #666;
+        }
+        .button-group {
+            margin-top: 20px;
+            display: flex;
+            gap: 10px;
+        }
+        button {
+            background-color: #2196f3;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+        button:hover {
+            background-color: #1976d2;
+        }
+        .reset-button {
+            background-color: #f44336;
+        }
+        .reset-button:hover {
+            background-color: #d32f2f;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>RFID Reader</h1>
+        
+        <div class="status" id="status">Waiting for connection...</div>
+        <div class="error" id="error"></div>
+
+        <h2>Unique Tags</h2>
+        <table class="data-table">
+            <thead>
+                <tr>
+                    <th>TID</th>
+                    <th>Count</th>
+                    <th>First Seen</th>
+                    <th>Last Seen</th>
+                </tr>
+            </thead>
+            <tbody id="uniqueTids"></tbody>
+        </table>
+
+        <div class="button-group">
+            <button class="reset-button" onclick="resetCounts()">Reset Counts</button>
+        </div>
+    </div>
+
+    <script>
+        const socket = io();
+        const statusDiv = document.getElementById('status');
+        const errorDiv = document.getElementById('error');
+        const uniqueTidsTable = document.getElementById('uniqueTids');
+
+        socket.on('connect', () => {
+            statusDiv.textContent = 'Connected to server';
+        });
+
+        socket.on('status', (message) => {
+            statusDiv.textContent = message;
+        });
+
+        socket.on('error', (message) => {
+            errorDiv.textContent = message;
+            errorDiv.style.display = 'block';
+            setTimeout(() => {
+                errorDiv.style.display = 'none';
+            }, 5000);
+        });
+
+        socket.on('uniqueTids', (tids) => {
+            console.log('Received TIDs:', tids);
+            
+            // Sort TIDs by count (descending)
+            tids.sort((a, b) => b.count - a.count);
+            console.log('Sorted TIDs:', tids);
+
+            // Create table HTML
+            const tableHTML = tids.map(data => `
+                <tr>
+                    <td>${data.tid}</td>
+                    <td><span class="count-badge">${data.count}</span></td>
+                    <td><span class="timestamp">${new Date(data.firstSeen).toLocaleString()}</span></td>
+                    <td><span class="timestamp">${new Date(data.lastSeen).toLocaleString()}</span></td>
+                </tr>
+            `).join('');
+
+            // Update table
+            uniqueTidsTable.innerHTML = tableHTML;
+        });
+
+        function resetCounts() {
+            socket.emit('resetCounts');
+        }
+    </script>
+</body>
+</html> 

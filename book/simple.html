@@ -1,0 +1,219 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>RFID Reader Dashboard</title>
+    <script src="/socket.io/socket.io.js"></script>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            background-color: #f4f7f6;
+            color: #333;
+            height: 100vh; /* Set body height to 100% of viewport height */
+            overflow: hidden; /* Prevent body scroll */
+        }
+        .dashboard-container {
+            display: flex; /* Use flexbox for columns */
+            height: calc(100vh - 40px); /* Adjust height considering body margin/padding */
+            padding: 20px;
+            gap: 20px; /* Space between columns */
+        }
+        .left-column {
+            flex: 0 0 250px; /* Fixed width for the left column */
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+        }
+        .right-column {
+            flex: 1; /* Take remaining space */
+            display: flex;
+            flex-direction: column;
+            overflow: hidden; /* Important for making inner content scrollable */
+        }
+        .status-bar {
+            width: 100%;
+            background-color: #e3f2fd;
+            color: #0277bd;
+            padding: 10px 20px;
+            text-align: center;
+            font-size: 1.1em;
+            margin-bottom: 0; /* Adjust margin */
+            border-radius: 4px;
+        }
+        .widget {
+            background-color: #ffffff;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            text-align: center;
+        }
+        .widget h3 {
+            margin-top: 0;
+            color: #555;
+        }
+        .widget .value {
+            font-size: 2em;
+            font-weight: bold;
+            color: #2196f3;
+        }
+        .table-container {
+            flex: 1; /* Make table container fill remaining height */
+            overflow-y: auto; /* Make this container scrollable */
+            background-color: #ffffff;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            padding: 15px;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 0; /* Adjust margin */
+        }
+        th {
+            background-color: #e0e0e0;
+            padding: 12px 15px;
+            text-align: left;
+            border-bottom: 2px solid #ccc;
+            position: sticky; /* Make header sticky */
+            top: 0; /* Stick to the top of the scrollable container */
+            z-index: 1; /* Ensure header is above content */
+        }
+        td {
+            padding: 12px 15px;
+            border-bottom: 1px solid #eee;
+            font-family: monospace;
+        }
+        tr:last-child td {
+            border-bottom: none; /* No border for the last row */
+        }
+        tr:hover {
+            background-color: #f5f5f5;
+        }
+        .count-badge {
+            background-color: #2196f3;
+            color: white;
+            padding: 4px 10px;
+            border-radius: 15px;
+            font-size: 0.9em;
+        }
+        .time {
+            font-size: 0.9em;
+            color: #666;
+        }
+        .actions {
+            margin-top: 20px;
+            text-align: center;
+        }
+        .actions button {
+            margin: 0 5px; /* Add some space between buttons */
+        }
+        button {
+            background-color: #f44336;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 1em;
+        }
+        button:hover {
+            background-color: #d32f2f;
+        }
+    </style>
+</head>
+<body>
+    <div class="dashboard-container">
+        <div class="left-column">
+            <div class="status-bar" id="status">Connecting...</div>
+            <div class="widget">
+                <h3>Total Unique Tags</h3>
+                <div class="value" id="totalUniqueTags">0</div>
+            </div>
+            <div class="actions">
+                <button id="startButton" onclick="startScan()">Start Scan</button>
+                <button id="stopButton" onclick="stopScan()">Stop Scan</button>
+                <button class="reset-button" onclick="reset()">Reset Counts</button>
+            </div>
+        </div>
+        
+        <div class="right-column">
+            <div class="table-container">
+                <h2>Unique Tags</h2>
+                <table>
+                    <thead>
+                        <tr>
+                            <th>TID</th>
+                            <th>Count</th>
+                            <th>First Seen</th>
+                            <th>Last Seen</th>
+                        </tr>
+                    </thead>
+                    <tbody id="tags"></tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const socket = io();
+        const statusDiv = document.getElementById('status');
+        const tagsTableBody = document.getElementById('tags');
+        const totalUniqueTagsDiv = document.getElementById('totalUniqueTags');
+        
+        const startButton = document.getElementById('startButton');
+        const stopButton = document.getElementById('stopButton');
+
+        socket.on('connect', () => {
+            statusDiv.textContent = 'Connected to Server';
+            statusDiv.style.backgroundColor = '#e8f5e9';
+            statusDiv.style.color = '#388e3c';
+        });
+        
+        socket.on('status', (message) => {
+            statusDiv.textContent = message;
+            // Adjust color based on status
+            if (message.includes('Connected')) {
+                statusDiv.style.backgroundColor = '#e8f5e9';
+                statusDiv.style.color = '#388e3c';
+            } else if (message.includes('Error')) {
+                statusDiv.style.backgroundColor = '#ffebee';
+                statusDiv.style.color = '#c62828';
+            } else {
+                statusDiv.style.backgroundColor = '#e3f2fd';
+                statusDiv.style.color = '#0277bd';
+            }
+        });
+        
+        socket.on('tags', (data) => {
+            // Filter and sort by count (descending)
+            const filteredData = data.filter(tag => tag.count >= 5);
+            filteredData.sort((a, b) => b.count - a.count);
+            
+            // Update total unique tags count
+            totalUniqueTagsDiv.textContent = filteredData.length;
+
+            // Update table
+            tagsTableBody.innerHTML = filteredData.map(tag => `
+                <tr>
+                    <td>${tag.tid}</td>
+                    <td><span class="count-badge">${tag.count}</span></td>
+                    <td><span class="time">${new Date(tag.firstSeen).toLocaleString()}</span></td>
+                    <td><span class="time">${new Date(tag.lastSeen).toLocaleString()}</span></td>
+                </tr>
+            `).join('');
+        });
+        
+        function reset() {
+            socket.emit('reset');
+        }
+
+        function startScan() {
+            socket.emit('startScan');
+        }
+
+        function stopScan() {
+            socket.emit('stopScan');
+        }
+    </script>
+</body>
+</html> 

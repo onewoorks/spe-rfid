@@ -1,0 +1,304 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>RFID Library</title>
+    <script src="/socket.io/socket.io.js"></script>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+            background-color: #f0f0f0;
+        }
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background-color: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .status {
+            padding: 10px;
+            margin-bottom: 10px;
+            border-radius: 4px;
+            background-color: #e8f5e9;
+        }
+        .error {
+            background-color: #ffebee;
+            color: #c62828;
+            padding: 10px;
+            margin-bottom: 10px;
+            border-radius: 4px;
+            display: none;
+        }
+        .data-container {
+            margin-top: 20px;
+            display: flex;
+            gap: 20px;
+        }
+        .data-section {
+            flex: 1;
+        }
+        .data-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 10px;
+        }
+        .data-table th {
+            background-color: #f5f5f5;
+            padding: 10px;
+            text-align: left;
+            border-bottom: 2px solid #ddd;
+        }
+        .data-table td {
+            padding: 10px;
+            border-bottom: 1px solid #ddd;
+            font-family: monospace;
+        }
+        .data-table tr:hover {
+            background-color: #f8f9fa;
+        }
+        .command-section {
+            margin-top: 20px;
+            padding: 20px;
+            background-color: #f5f5f5;
+            border-radius: 4px;
+        }
+        .form-group {
+            margin-bottom: 10px;
+        }
+        label {
+            display: block;
+            margin-bottom: 5px;
+        }
+        input {
+            padding: 8px;
+            width: 100%;
+            box-sizing: border-box;
+        }
+        button {
+            background-color: #2196f3;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 4px;
+            cursor: pointer;
+            margin-right: 10px;
+        }
+        button:hover {
+            background-color: #1976d2;
+        }
+        .raw-data {
+            color: #666;
+            font-size: 0.9em;
+        }
+        .count-badge {
+            background-color: #2196f3;
+            color: white;
+            padding: 2px 8px;
+            border-radius: 12px;
+            font-size: 0.9em;
+        }
+        .button-group {
+            margin-top: 20px;
+            display: flex;
+            gap: 10px;
+        }
+        .reset-button {
+            background-color: #f44336;
+        }
+        .reset-button:hover {
+            background-color: #d32f2f;
+        }
+        .timestamp {
+            font-size: 0.9em;
+            color: #666;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>RFID Library</h1>
+        
+        <div class="status" id="status">Waiting for connection...</div>
+        <div class="error" id="error"></div>
+
+        <div class="data-container">
+            <div class="data-section">
+                <h2>Unique TIDs</h2>
+                <table class="data-table">
+                    <thead>
+                        <tr>
+                            <th>TID</th>
+                            <th>Count</th>
+                            <th>First Seen</th>
+                            <th>Last Seen</th>
+                        </tr>
+                    </thead>
+                    <tbody id="uniqueTids"></tbody>
+                </table>
+            </div>
+
+            <div class="data-section">
+                <h2>Recent Scans</h2>
+                <table class="data-table">
+                    <thead>
+                        <tr>
+                            <th>Time</th>
+                            <th>TID</th>
+                            <th>Count</th>
+                            <th>Raw Data</th>
+                        </tr>
+                    </thead>
+                    <tbody id="recentScans"></tbody>
+                </table>
+            </div>
+        </div>
+
+        <div class="command-section">
+            <h2>Send Command</h2>
+            <div class="form-group">
+                <label for="adr">Address (hex):</label>
+                <input type="text" id="adr" value="00">
+            </div>
+            <div class="form-group">
+                <label for="cmd">Command (hex):</label>
+                <input type="text" id="cmd" value="21">
+            </div>
+            <div class="form-group">
+                <label for="data">Data (hex, optional):</label>
+                <input type="text" id="data">
+            </div>
+            <div class="button-group">
+                <button onclick="sendCommand()">Send Command</button>
+                <button class="reset-button" onclick="resetCounts()">Reset Counts</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const socket = io();
+        const statusDiv = document.getElementById('status');
+        const errorDiv = document.getElementById('error');
+        const uniqueTidsTable = document.getElementById('uniqueTids');
+        const recentScansTable = document.getElementById('recentScans');
+
+        socket.on('connect', () => {
+            statusDiv.textContent = 'Connected to server';
+        });
+
+        socket.on('status', (message) => {
+            statusDiv.textContent = message;
+        });
+
+        socket.on('error', (message) => {
+            errorDiv.textContent = message;
+            errorDiv.style.display = 'block';
+            setTimeout(() => {
+                errorDiv.style.display = 'none';
+            }, 5000);
+        });
+
+        socket.on('rfidData', (data) => {
+            console.log('Received data:', data); // Debug log
+            
+            const row = document.createElement('tr');
+            
+            // Time column
+            const timeCell = document.createElement('td');
+            timeCell.textContent = new Date().toLocaleTimeString();
+            row.appendChild(timeCell);
+            
+            // TID column
+            const tidCell = document.createElement('td');
+            tidCell.textContent = data.tid;
+            row.appendChild(tidCell);
+            
+            // Count column
+            const countCell = document.createElement('td');
+            const countBadge = document.createElement('span');
+            countBadge.className = 'count-badge';
+            countBadge.textContent = data.count;
+            countCell.appendChild(countBadge);
+            row.appendChild(countCell);
+            
+            // Raw data column
+            const rawCell = document.createElement('td');
+            rawCell.innerHTML = `<span class="raw-data">${data.raw}</span>`;
+            row.appendChild(rawCell);
+            
+            // Add row to the beginning of the table
+            recentScansTable.insertBefore(row, recentScansTable.firstChild);
+            
+            // Keep only last 50 rows
+            while (recentScansTable.children.length > 50) {
+                recentScansTable.removeChild(recentScansTable.lastChild);
+            }
+        });
+
+        socket.on('uniqueTids', (tids) => {
+            // Clear the table
+            while (uniqueTidsTable.firstChild) {
+                uniqueTidsTable.removeChild(uniqueTidsTable.firstChild);
+            }
+
+            // Sort TIDs by count (descending)
+            tids.sort((a, b) => b.count - a.count);
+
+            // Add each TID to the table
+            tids.forEach(data => {
+                const row = document.createElement('tr');
+                
+                // TID column
+                const tidCell = document.createElement('td');
+                tidCell.textContent = data.tid;
+                row.appendChild(tidCell);
+                
+                // Count column
+                const countCell = document.createElement('td');
+                const countBadge = document.createElement('span');
+                countBadge.className = 'count-badge';
+                countBadge.textContent = data.count;
+                countCell.appendChild(countBadge);
+                row.appendChild(countCell);
+                
+                // First seen column
+                const firstSeenCell = document.createElement('td');
+                firstSeenCell.innerHTML = `<span class="timestamp">${new Date(data.firstSeen).toLocaleString()}</span>`;
+                row.appendChild(firstSeenCell);
+                
+                // Last seen column
+                const lastSeenCell = document.createElement('td');
+                lastSeenCell.innerHTML = `<span class="timestamp">${new Date(data.lastSeen).toLocaleString()}</span>`;
+                row.appendChild(lastSeenCell);
+                
+                uniqueTidsTable.appendChild(row);
+            });
+        });
+
+        function sendCommand() {
+            const adr = parseInt(document.getElementById('adr').value, 16);
+            const cmd = parseInt(document.getElementById('cmd').value, 16);
+            const data = document.getElementById('data').value;
+            
+            let cmdData = null;
+            if (data) {
+                cmdData = data.split(' ').map(x => parseInt(x, 16));
+            }
+
+            socket.emit('sendCommand', { adr, cmd, data: cmdData });
+        }
+
+        function resetCounts() {
+            socket.emit('resetCounts');
+            // Clear both tables
+            while (uniqueTidsTable.firstChild) {
+                uniqueTidsTable.removeChild(uniqueTidsTable.firstChild);
+            }
+            while (recentScansTable.firstChild) {
+                recentScansTable.removeChild(recentScansTable.firstChild);
+            }
+        }
+    </script>
+</body>
+</html> 
